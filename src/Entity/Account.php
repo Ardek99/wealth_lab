@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: AccountRepository::class)]
 #[ORM\Table(name: 'accounts')]
@@ -16,15 +17,19 @@ class Account
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['account:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['account:read'])]
     private ?string $name = null;
 
     #[ORM\Column(enumType: AccountType::class)]
+    #[Groups(['account:read'])]
     private ?AccountType $type = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2)]
+    #[Groups(['account:read'])]
     private ?string $balance = null;
 
     #[ORM\ManyToOne(inversedBy: 'accounts')]
@@ -34,7 +39,7 @@ class Account
     /**
      * @var Collection<int, Transaction>
      */
-    #[ORM\OneToMany(targetEntity: Transaction::class, mappedBy: 'account')]
+    #[ORM\OneToMany(targetEntity: Transaction::class, mappedBy: 'account', cascade: ['remove'])]
     private Collection $transactions;
 
     public function __construct()

@@ -6,6 +6,7 @@ use App\Enum\TransactionType;
 use App\Repository\TransactionRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: TransactionRepository::class)]
 #[ORM\Table(name: '`transaction`')]
@@ -14,21 +15,27 @@ class Transaction
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['transaction:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['transaction:read'])]
     private ?string $name = null;
 
     #[ORM\Column(enumType: TransactionType::class)]
+    #[Groups(['transaction:read'])]
     private ?TransactionType $type = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2)]
+    #[Groups(['transaction:read'])]
     private ?string $amount = null;
 
     #[ORM\Column(type: Types::DATE_MUTABLE)]
+    #[Groups(['transaction:read'])]
     private ?\DateTime $date = null;
 
     #[ORM\Column(type: Types::TEXT)]
+    #[Groups(['transaction:read'])]
     private ?string $description = null;
 
     #[ORM\ManyToOne(inversedBy: 'transactions')]

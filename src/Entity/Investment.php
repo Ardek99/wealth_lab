@@ -6,6 +6,7 @@ use App\Enum\InvestmentType;
 use App\Repository\InvestmentRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: InvestmentRepository::class)]
 class Investment
@@ -13,15 +14,19 @@ class Investment
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['investment:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['investment:read'])]
     private ?string $name = null;
 
     #[ORM\Column(enumType: InvestmentType::class)]
+    #[Groups(['investment:read'])]
     private ?InvestmentType $type = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2)]
+    #[Groups(['investment:read'])]
     private ?string $amount = null;
 
     #[ORM\ManyToOne(inversedBy: 'investments')]
