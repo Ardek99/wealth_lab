@@ -17,20 +17,7 @@ class AccountRepository extends ServiceEntityRepository
         parent::__construct($registry, Account::class);
     }
 
-    public function getTotalBalance(User $user): float
-    {
-        $result = $this->createQueryBuilder('a')
-            ->select('SUM(a.balance) as totalBalance')
-            ->where('a.user = :user')
-            ->setParameter('user', $user)
-            ->getQuery()
-            ->getSingleScalarResult()
-        ;
-
-        return (float) $result;
-    }
-
-//    /**
+    //    /**
 //     * @return Account[] Returns an array of Account objects
 //     */
 //    public function findByExampleField($value): array

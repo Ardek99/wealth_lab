@@ -28,7 +28,12 @@ final class UserController extends AbstractController
 
         $errors = $validator->validate($dto);
         if (count($errors) > 0) {
-            return $this->json(['errors' => (string) $errors], 400);
+            $errorMessages = [];
+            foreach ($errors as $error) {
+                $field = str_replace('Object(App\DTO\UserDTO).', '', $error->getPropertyPath());
+                $errorMessages[$field] = $error->getMessage();
+            }
+            return $this->json(['errors' => $errorMessages], 400);
         }
 
         $user = new User();
@@ -36,16 +41,27 @@ final class UserController extends AbstractController
         $user->setLastName($dto->lastName);
         $user->setEmail($dto->email);
         $user->setPassword($passwordHasher->hashPassword($user, $dto->password));
+        $user->setPhoneNumber($dto->phoneNumber);
 
         $existing = $em->getRepository(User::class)->findOneBy(['email' => $dto->email]);
         if ($existing) {
-            return $this->json(['errors' => 'Email already in use'], 409);
+            return $this->json(['errors' => 'Unable to complete registration. Please check your information.'], 400);
+        }
+
+        $existingPhone = $em->getRepository(User::class)->findOneBy(['phoneNumber' => $dto->phoneNumber]);
+        if ($existingPhone) {
+            return $this->json(['errors' => 'Unable to complete registration. Please check your information.'], 400);
         }
          
         $em->persist($user);
         $em->flush();
 
-        return $this->json(['message' => 'User registered successfully'], 201);
+        return $this->json([
+            'firstName' => $user->getFirstName(),
+            'lastName' => $user->getLastName(),
+            'email' => $user->getEmail(),
+            'phoneNumber' => $user->getPhoneNumber(),
+        ], 201);
     }
 
     #[Route('/api/profile', methods: ['GET'], name: 'profile')]
@@ -62,6 +78,7 @@ final class UserController extends AbstractController
             'firstName' => $user->getFirstName(),
             'lastName' => $user->getLastName(),
             'email' => $user->getEmail(),
+            'phoneNumber' => $user->getPhoneNumber(),
         ]);
     }
 }

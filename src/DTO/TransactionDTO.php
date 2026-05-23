@@ -22,8 +22,6 @@ class TransactionDTO
         #[Assert\NotNull]
         private \DateTime $date,
 
-        private ?string $description,
-
         #[Assert\NotNull]
         #[Assert\Positive]
         private int $accountId,
@@ -52,11 +50,6 @@ class TransactionDTO
     public function getDate(): \DateTime
     {
         return $this->date;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
     }
 
     public function getAccountId(): int

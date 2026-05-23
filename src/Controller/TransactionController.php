@@ -101,7 +101,6 @@ final class TransactionController extends AbstractController
         $transaction->setType($dto->getType());
         $transaction->setAmount($dto->getAmount());
         $transaction->setDate($dto->getDate());
-        $transaction->setDescription($dto->getDescription());
         $transaction->setAccount($account);
         $transaction->setCategory($category);
 
@@ -153,7 +152,6 @@ final class TransactionController extends AbstractController
         $transaction->setType($dto->getType());
         $transaction->setAmount($dto->getAmount());
         $transaction->setDate($dto->getDate());
-        $transaction->setDescription($dto->getDescription());
         $transaction->setAccount($account);
         $transaction->setCategory($category);
 

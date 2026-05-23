@@ -28,10 +28,6 @@ class Account
     #[Groups(['account:read'])]
     private ?AccountType $type = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2)]
-    #[Groups(['account:read'])]
-    private ?string $balance = null;
-
     #[ORM\ManyToOne(inversedBy: 'accounts')]
     #[ORM\JoinColumn(nullable: false)]
     private ?User $user = null;
@@ -72,18 +68,6 @@ class Account
     public function setType(AccountType $type): static
     {
         $this->type = $type;
-
-        return $this;
-    }
-
-    public function getBalance(): ?string
-    {
-        return $this->balance;
-    }
-
-    public function setBalance(string $balance): static
-    {
-        $this->balance = $balance;
 
         return $this;
     }

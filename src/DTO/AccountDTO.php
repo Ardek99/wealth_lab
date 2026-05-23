@@ -14,10 +14,6 @@ class AccountDTO
 
         #[Assert\NotNull]
         private AccountType $type,
-
-        #[Assert\NotNull]
-        #[Assert\PositiveOrZero]
-        private float $balance,
     ) {
     }
 
@@ -29,10 +25,5 @@ class AccountDTO
     public function getType(): AccountType
     {
         return $this->type;
-    }
-
-    public function getBalance(): float
-    {
-        return $this->balance;
     }
 }

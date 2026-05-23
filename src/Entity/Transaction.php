@@ -34,10 +34,6 @@ class Transaction
     #[Groups(['transaction:read'])]
     private ?\DateTime $date = null;
 
-    #[ORM\Column(type: Types::TEXT)]
-    #[Groups(['transaction:read'])]
-    private ?string $description = null;
-
     #[ORM\ManyToOne(inversedBy: 'transactions')]
     #[ORM\JoinColumn(nullable: false)]
     private ?Account $account = null;
@@ -95,18 +91,6 @@ class Transaction
     public function setDate(\DateTime $date): static
     {
         $this->date = $date;
-
-        return $this;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-
-    public function setDescription(string $description): static
-    {
-        $this->description = $description;
 
         return $this;
     }

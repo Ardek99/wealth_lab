@@ -14,6 +14,16 @@ class UserDTO
         #[Assert\Email]
         public string $email = '',
         #[Assert\NotBlank]
+        #[Assert\Regex(
+            pattern: '/^0[1-9](\d{8})$/',
+            message: 'Phone number must be in E.164 format (e.g. +1234567890).'
+        )]
+        public string $phoneNumber = '',
+        #[Assert\NotBlank]
+        #[Assert\Regex(
+            pattern: '/^(?=.*[A-Za-z])(?=.*\d)(?=.*[\W_]).{8,}$/',
+            message: 'Password must be at least 8 characters, with letters, numbers and a special character.'
+        )]
         public string $password = '',
     ) {
     }
@@ -31,5 +41,10 @@ class UserDTO
     public function getPassword(): ?string
     {
         return $this->password;
+    }
+
+    public function getPhoneNumber(): ?string
+    {
+        return $this->phoneNumber;
     }
 }
