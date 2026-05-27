@@ -9,7 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: TransactionRepository::class)]
-#[ORM\Table(name: '`transaction`')]
+#[ORM\Table(name: '`transactions`')]
 class Transaction
 {
     #[ORM\Id]
@@ -36,11 +36,18 @@ class Transaction
 
     #[ORM\ManyToOne(inversedBy: 'transactions')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['transaction:read'])]
     private ?Account $account = null;
 
     #[ORM\ManyToOne(inversedBy: 'transactions')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['transaction:read'])]
     private ?Category $category = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['transaction:read'])]
+    private ?RecurringTransaction $recurringTransaction = null;
 
     public function getId(): ?int
     {
@@ -115,6 +122,18 @@ class Transaction
     public function setCategory(?Category $category): static
     {
         $this->category = $category;
+
+        return $this;
+    }
+
+    public function getRecurringTransaction(): ?RecurringTransaction
+    {
+        return $this->recurringTransaction;
+    }
+
+    public function setRecurringTransaction(?RecurringTransaction $recurringTransaction): static
+    {
+        $this->recurringTransaction = $recurringTransaction;
 
         return $this;
     }

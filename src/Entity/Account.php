@@ -17,11 +17,11 @@ class Account
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['account:read'])]
+    #[Groups(['account:read', 'transaction:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['account:read'])]
+    #[Groups(['account:read', 'transaction:read'])]
     private ?string $name = null;
 
     #[ORM\Column(enumType: AccountType::class)]
@@ -38,9 +38,16 @@ class Account
     #[ORM\OneToMany(targetEntity: Transaction::class, mappedBy: 'account', cascade: ['remove'])]
     private Collection $transactions;
 
+    /**
+     * @var Collection<int, RecurringTransaction>
+     */
+    #[ORM\OneToMany(targetEntity: RecurringTransaction::class, mappedBy: 'account')]
+    private Collection $recurringTransactions;
+
     public function __construct()
     {
         $this->transactions = new ArrayCollection();
+        $this->recurringTransactions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -108,6 +115,36 @@ class Account
             // set the owning side to null (unless already changed)
             if ($transaction->getAccount() === $this) {
                 $transaction->setAccount(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, RecurringTransaction>
+     */
+    public function getRecurringTransactions(): Collection
+    {
+        return $this->recurringTransactions;
+    }
+
+    public function addRecurringTransaction(RecurringTransaction $recurringTransaction): static
+    {
+        if (!$this->recurringTransactions->contains($recurringTransaction)) {
+            $this->recurringTransactions->add($recurringTransaction);
+            $recurringTransaction->setAccount($this);
+        }
+
+        return $this;
+    }
+
+    public function removeRecurringTransaction(RecurringTransaction $recurringTransaction): static
+    {
+        if ($this->recurringTransactions->removeElement($recurringTransaction)) {
+            // set the owning side to null (unless already changed)
+            if ($recurringTransaction->getAccount() === $this) {
+                $recurringTransaction->setAccount(null);
             }
         }
 

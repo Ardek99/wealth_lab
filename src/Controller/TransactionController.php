@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\DTO\TransactionDTO;
 use App\Entity\Account;
 use App\Entity\Category;
+use App\Entity\RecurringTransaction;
 use App\Entity\Transaction;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -103,6 +104,13 @@ final class TransactionController extends AbstractController
         $transaction->setDate($dto->getDate());
         $transaction->setAccount($account);
         $transaction->setCategory($category);
+
+        if ($dto->getRecurringTransactionId()) {
+            $recurring = $em->getRepository(RecurringTransaction::class)->find($dto->getRecurringTransactionId());
+            if ($recurring && $recurring->getUser() === $user) {
+                $transaction->setRecurringTransaction($recurring);
+            }
+        }
 
         $em->persist($transaction);
         $em->flush();

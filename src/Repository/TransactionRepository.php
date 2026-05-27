@@ -2,8 +2,10 @@
 
 namespace App\Repository;
 
+use App\Entity\RecurringTransaction;
 use App\Entity\Transaction;
 use App\Entity\User;
+use App\Enum\BudgetGroupType;
 use App\Enum\TransactionType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -98,8 +100,8 @@ class TransactionRepository extends ServiceEntityRepository
             ->andWhere('t.date <= :end')
             ->setParameter('user', $user)
             ->setParameter('type', TransactionType::INCOME)
-            ->setParameter('start', (new \DateTime())->modify('first day of this month')->setTime(0, 0))
-            ->setParameter('end', (new \DateTime())->modify('last day of this month')->setTime(23, 59, 59))
+            ->setParameter('start', (new \DateTime())->modify('first day of this month')->format('Y-m-d'))
+            ->setParameter('end', (new \DateTime())->modify('last day of this month')->format('Y-m-d'))
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -118,8 +120,8 @@ class TransactionRepository extends ServiceEntityRepository
             ->andWhere('t.date <= :end')
             ->setParameter('user', $user)
             ->setParameter('type', TransactionType::EXPENSE)
-            ->setParameter('start', (new \DateTime())->modify('first day of this month')->setTime(0, 0))
-            ->setParameter('end', (new \DateTime())->modify('last day of this month')->setTime(23, 59, 59))
+            ->setParameter('start', (new \DateTime())->modify('first day of this month')->format('Y-m-d'))
+            ->setParameter('end', (new \DateTime())->modify('last day of this month')->format('Y-m-d'))
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -135,8 +137,12 @@ class TransactionRepository extends ServiceEntityRepository
             ->join('t.category', 'c')
             ->andWhere('a.user = :user')
             ->andWhere('t.type = :type')
+            ->andWhere('t.date >= :start')
+            ->andWhere('t.date <= :end')
             ->setParameter('user', $user)
             ->setParameter('type', TransactionType::EXPENSE)
+            ->setParameter('start', (new \DateTime())->modify('first day of this month')->format('Y-m-d'))
+            ->setParameter('end', (new \DateTime())->modify('last day of this month')->format('Y-m-d'))
             ->groupBy('c.id')
             ->orderBy('total', 'DESC')
             ->setMaxResults(5)
@@ -160,5 +166,55 @@ class TransactionRepository extends ServiceEntityRepository
         ;
 
         return $result;
+    }
+
+    public function findFutureByRecurring(RecurringTransaction $recurring, \DateTime $from): array
+    {
+        return $this->createQueryBuilder('t')
+            ->where('t.recurringTransaction = :r AND t.date >= :from')
+            ->setParameter('r', $recurring)
+            ->setParameter('from', $from)
+            ->getQuery()->getResult();
+    }
+
+    public function sumByType(User $user, TransactionType $type, \DateTime $start, \DateTime $end): float
+    {
+        $result = $this->createQueryBuilder('t')
+            ->select('SUM(t.amount) as total')
+            ->join('t.account', 'a')
+            ->where('a.user = :user')
+            ->andWhere('t.type = :type')
+            ->andWhere('t.date BETWEEN :start AND :end')
+            ->setParameter('user', $user)
+            ->setParameter('type', $type)
+            ->setParameter('start', $start)
+            ->setParameter('end', $end)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (float) ($result ?? 0);
+    }
+
+    public function sumByBudgetGroup(User $user, BudgetGroupType $group, \DateTime $start, \DateTime $end): float
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $result = $conn->fetchOne(
+            'SELECT SUM(t.amount) FROM transactions t
+             JOIN categories c ON t.category_id = c.id
+             JOIN accounts a ON t.account_id = a.id
+             WHERE a.user_id = :userId
+               AND t.type = :type
+               AND t.date BETWEEN :start AND :end
+               AND c.budget_group = :group',
+            [
+                'userId' => $user->getId(),
+                'type'   => 'expense',
+                'start'  => $start->format('Y-m-d'),
+                'end'    => $end->format('Y-m-d'),
+                'group'  => $group->value,
+            ]
+        );
+
+        return (float) ($result ?? 0);
     }
 }

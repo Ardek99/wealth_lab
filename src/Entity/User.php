@@ -62,11 +62,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: Investment::class, mappedBy: 'user')]
     private Collection $investments;
 
+    /**
+     * @var Collection<int, RecurringTransaction>
+     */
+    #[ORM\OneToMany(targetEntity: RecurringTransaction::class, mappedBy: 'user')]
+    private Collection $recurringTransactions;
+
     public function __construct()
     {
         $this->accounts = new ArrayCollection();
         $this->goals = new ArrayCollection();
 $this->investments = new ArrayCollection();
+$this->recurringTransactions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -264,6 +271,36 @@ $this->investments = new ArrayCollection();
             // set the owning side to null (unless already changed)
             if ($investment->getUser() === $this) {
                 $investment->setUser(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, RecurringTransaction>
+     */
+    public function getRecurringTransactions(): Collection
+    {
+        return $this->recurringTransactions;
+    }
+
+    public function addRecurringTransaction(RecurringTransaction $recurringTransaction): static
+    {
+        if (!$this->recurringTransactions->contains($recurringTransaction)) {
+            $this->recurringTransactions->add($recurringTransaction);
+            $recurringTransaction->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removeRecurringTransaction(RecurringTransaction $recurringTransaction): static
+    {
+        if ($this->recurringTransactions->removeElement($recurringTransaction)) {
+            // set the owning side to null (unless already changed)
+            if ($recurringTransaction->getUser() === $this) {
+                $recurringTransaction->setUser(null);
             }
         }
 

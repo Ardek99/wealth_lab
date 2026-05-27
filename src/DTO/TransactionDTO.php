@@ -29,6 +29,8 @@ class TransactionDTO
         #[Assert\NotNull]
         #[Assert\Positive]
         private int $categoryId,
+        
+        private ?int $recurringTransactionId = null
     ) {
     }
 
@@ -60,5 +62,10 @@ class TransactionDTO
     public function getCategoryId(): int
     {
         return $this->categoryId;
+    }
+
+    public function getRecurringTransactionId(): ?int
+    {
+        return $this->recurringTransactionId;
     }
 }
