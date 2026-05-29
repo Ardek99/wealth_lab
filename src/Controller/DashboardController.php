@@ -22,6 +22,7 @@ final class DashboardController extends AbstractController
             'expenses'           => $transactionRepository->getMonthlyExpenses($user),
             'topCategories'      => $transactionRepository->getTopCategories($user),
             'recentTransactions' => $transactionRepository->getRecentTransactions($user),
+            'monthlyEvolution'      => $transactionRepository->getMonthlyEvolution($user),
         ], 200, [], ['groups' => ['transaction:read']]);
     }
 }

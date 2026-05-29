@@ -187,8 +187,8 @@ class TransactionRepository extends ServiceEntityRepository
             ->andWhere('t.date BETWEEN :start AND :end')
             ->setParameter('user', $user)
             ->setParameter('type', $type)
-            ->setParameter('start', $start)
-            ->setParameter('end', $end)
+            ->setParameter('start', $start->format('Y-m-d'))
+            ->setParameter('end', $end->format('Y-m-d'))
             ->getQuery()
             ->getSingleScalarResult();
 
@@ -216,5 +216,27 @@ class TransactionRepository extends ServiceEntityRepository
         );
 
         return (float) ($result ?? 0);
+    }
+
+    public function getMonthlyEvolution(User $user, int $months = 6): array
+    {
+        $result = [];
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $date  = new \DateTime("first day of -$i months");
+            $start = (clone $date)->format('Y-m-01');
+            $end   = (clone $date)->format('Y-m-t');
+
+            $income = $this->sumByType($user, TransactionType::INCOME,
+                new \DateTime($start), new \DateTime($end));
+            $expenses = $this->sumByType($user, TransactionType::EXPENSE,
+                new \DateTime($start), new \DateTime($end));
+
+            $result[] = [
+                'month' => ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'][(int)$date->format('n') - 1],
+                'income'   => $income,
+                'expenses' => $expenses,
+            ];
+        }
+        return $result;
     }
 }
