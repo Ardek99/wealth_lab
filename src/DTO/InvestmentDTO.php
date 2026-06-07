@@ -13,9 +13,17 @@ class InvestmentDTO
         private string $name,
         #[Assert\NotNull]
         private InvestmentType $type,
-        #[Assert\NotNull]
+        #[Assert\Length(max: 50)]
+        private ?string $ticker = null,
+        #[Assert\NotBlank]
         #[Assert\Positive]
-        private float $amount,
+        private float $quantity,
+        #[Assert\NotBlank]
+        #[Assert\Positive]
+        private float $purchasePrice,
+        #[Assert\NotBlank]
+        #[Assert\Type("\DateTimeInterface")]
+        private \DateTimeInterface $purchaseDate,
     ) {
     }
 
@@ -29,8 +37,23 @@ class InvestmentDTO
         return $this->type;
     }
 
-    public function getAmount(): float
+    public function getTicker(): ?string
     {
-        return $this->amount;
+        return $this->ticker;
+    }
+
+    public function getQuantity(): float
+    {
+        return $this->quantity;
+    }
+
+    public function getPurchasePrice(): float
+    {
+        return $this->purchasePrice;
+    }
+
+    public function getPurchaseDate(): \DateTimeInterface
+    {
+        return $this->purchaseDate;
     }
 }

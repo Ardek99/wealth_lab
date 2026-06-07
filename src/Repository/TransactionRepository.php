@@ -50,12 +50,12 @@ class TransactionRepository extends ServiceEntityRepository
 
         if ($from) {
             $qb->andWhere('t.date >= :from')
-            ->setParameter('from', $from);
+            ->setParameter('from', $from->format('Y-m-d'));
         }
 
         if ($to) {
             $qb->andWhere('t.date <= :to')
-            ->setParameter('to', $to);
+            ->setParameter('to', $to->format('Y-m-d'));
         }
 
         return $qb->getQuery()->getResult();
@@ -79,11 +79,11 @@ class TransactionRepository extends ServiceEntityRepository
         }
         if ($from) {
             $qb->andWhere('t.date >= :from')
-               ->setParameter('from', $from);
+               ->setParameter('from', $from->format('Y-m-d'));
         }
         if ($to) {
             $qb->andWhere('t.date <= :to')
-               ->setParameter('to', $to);
+               ->setParameter('to', $to->format('Y-m-d'));
         }
 
         return (int) $qb->getQuery()->getSingleScalarResult();

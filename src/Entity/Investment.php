@@ -26,9 +26,29 @@ class Investment
     #[Groups(['investment:read'])]
     private ?InvestmentType $type = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2)]
+    #[ORM\Column(length: 50, nullable: true)]
     #[Groups(['investment:read'])]
-    private ?string $amount = null;
+    private ?string $ticker = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 15, scale: 6)]
+    #[Groups(['investment:read'])]
+    private ?string $quantity = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 15, scale: 6)]
+    #[Groups(['investment:read'])]
+    private ?string $purchasePrice = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 15, scale: 6, nullable: true)]
+    #[Groups(['investment:read'])]
+    private ?string $currentPrice = null;
+
+    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    #[Groups(['investment:read'])]
+    private ?\DateTimeInterface $purchaseDate = null;
+
+    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
+    #[Groups(['investment:read'])]
+    private ?\DateTimeInterface $currentPriceUpdatedAt = null;
 
     #[ORM\ManyToOne(inversedBy: 'investments')]
     #[ORM\JoinColumn(nullable: false)]
@@ -63,14 +83,73 @@ class Investment
         return $this;
     }
 
-    public function getAmount(): ?string
+    public function getTicker(): ?string
     {
-        return $this->amount;
+        return $this->ticker;
     }
 
-    public function setAmount(string $amount): static
+    public function setTicker(?string $ticker): static
     {
-        $this->amount = $amount;
+        $this->ticker = $ticker;
+
+        return $this;
+    }
+
+    public function getQuantity(): ?string
+    {
+        return $this->quantity;
+    }
+
+    public function setQuantity(string $quantity): static
+    {
+        $this->quantity = $quantity;
+
+        return $this;
+    }
+
+    public function getPurchasePrice(): ?string
+    {
+        return $this->purchasePrice;
+    }
+
+    public function setPurchasePrice(string $purchasePrice): static
+    {
+        $this->purchasePrice = $purchasePrice;
+
+        return $this;
+    }
+
+    public function getCurrentPrice(): ?string
+    {
+        return $this->currentPrice;
+    }
+
+    public function setCurrentPrice(?string $currentPrice): static
+    {
+        $this->currentPrice = $currentPrice;
+
+        return $this;
+    }
+
+    public function getPurchaseDate(): ?\DateTimeInterface
+    {
+        return $this->purchaseDate;
+    }
+
+    public function setPurchaseDate(\DateTimeInterface $purchaseDate): static
+    {
+        $this->purchaseDate = \DateTime::createFromInterface($purchaseDate);
+        return $this;
+    }
+
+    public function getCurrentPriceUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->currentPriceUpdatedAt;
+    }
+
+    public function setCurrentPriceUpdatedAt(?\DateTimeInterface $currentPriceUpdatedAt): static
+    {
+        $this->currentPriceUpdatedAt = $currentPriceUpdatedAt;
 
         return $this;
     }
@@ -85,5 +164,34 @@ class Investment
         $this->user = $user;
 
         return $this;
+    }
+
+    #[Groups(['investment:read'])]
+    public function getPurchaseValue(): float
+    {
+        return round((float)$this->quantity * (float)$this->purchasePrice, 2);
+    }
+
+    #[Groups(['investment:read'])]
+    public function getCurrentValue(): ?float
+    {
+        if ($this->currentPrice === null) return null;
+        return round((float)$this->quantity * (float)$this->currentPrice, 2);
+    }
+
+    #[Groups(['investment:read'])]
+    public function getGainLoss(): ?float
+    {
+        $current = $this->getCurrentValue();
+        if ($current === null) return null;
+        return round($current - $this->getPurchaseValue(), 2);
+    }
+
+    #[Groups(['investment:read'])]
+    public function getGainLossPercent(): ?float
+    {
+        $purchase = $this->getPurchaseValue();
+        if ($purchase == 0 || $this->currentPrice === null) return null;
+        return round((($this->getCurrentValue() - $purchase) / $purchase) * 100, 2);
     }
 }

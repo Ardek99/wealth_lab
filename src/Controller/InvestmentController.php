@@ -12,6 +12,8 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use App\Entity\User;
+use App\Enum\InvestmentType;
+use App\Service\PriceFetcherService;
 
 final class InvestmentController extends AbstractController
 {
@@ -24,6 +26,20 @@ final class InvestmentController extends AbstractController
         $investments = $em->getRepository(Investment::class)->findBy(['user' => $user]);
 
         return $this->json($investments, 200, [], ['groups' => ['investment:read']]);
+    }
+
+    #[Route('/api/investments/search', methods: ['GET'], name: 'app_investment_search')]
+    public function search(Request $request, PriceFetcherService $priceFetcher): Response
+    {
+        $searchQuery = $request->query->get('q', '');
+
+        if (strlen($searchQuery) < 2) {
+            return $this->json([]);
+        }
+
+        $results = $priceFetcher->searchAssets($searchQuery);
+
+        return $this->json($results);
     }
 
     #[Route('/api/investments/{id}', methods: ['GET'], name: 'app_investment_one')]
@@ -43,6 +59,7 @@ final class InvestmentController extends AbstractController
         SerializerInterface $serializer,
         ValidatorInterface $validator,
         EntityManagerInterface $em,
+        PriceFetcherService $priceFetcher,
     ): Response
     {
         $dto = $serializer->deserialize($request->getContent(), InvestmentDTO::class, 'json');
@@ -58,10 +75,24 @@ final class InvestmentController extends AbstractController
         $investment = new Investment();
         $investment->setName($dto->getName());
         $investment->setType($dto->getType());
-        $investment->setAmount($dto->getAmount());
+        $investment->setTicker($dto->getTicker());
+        $investment->setQuantity($dto->getQuantity());
+        $investment->setPurchasePrice($dto->getPurchasePrice());
+        $investment->setPurchaseDate($dto->getPurchaseDate());
         $investment->setUser($user);
 
         $em->persist($investment);
+
+        $price = match($investment->getType()) {
+            InvestmentType::CRYPTO => $priceFetcher->fetchCryptoPrice($investment->getTicker()),
+            InvestmentType::OTHER  => null,
+            default                => $priceFetcher->fetchStockPrice($investment->getTicker()),
+        };
+
+        if ($price !== null && $investment->getTicker()) {
+            $investment->setCurrentPrice((string) $price);
+            $investment->setCurrentPriceUpdatedAt(new \DateTime());
+        }
         $em->flush();
 
         return $this->json($investment, 201, [], ['groups' => ['investment:read']]);
@@ -93,7 +124,10 @@ final class InvestmentController extends AbstractController
         }
 
         $investment->setName($dto->getName());
-        $investment->setAmount($dto->getAmount());
+        $investment->setTicker($dto->getTicker());
+        $investment->setQuantity($dto->getQuantity());
+        $investment->setPurchasePrice($dto->getPurchasePrice());
+        $investment->setPurchaseDate($dto->getPurchaseDate());
         $investment->setType($dto->getType());
 
         $em->flush();
