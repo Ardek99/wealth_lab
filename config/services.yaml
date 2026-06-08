@@ -25,3 +25,7 @@ services:
     App\Service\PriceFetcherService:
         arguments:
             $twelveDataApiKey: '%env(TWELVE_DATA_API_KEY)%'
+    
+    App\Service\AdvisorService:
+        arguments:
+            $claudeApiKey: '%env(ANTHROPIC_API_KEY)%'
