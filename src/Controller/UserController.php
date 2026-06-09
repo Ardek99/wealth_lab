@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\DTO\UserDTO;
+use App\DTO\UserUpdateDTO;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -62,6 +63,39 @@ final class UserController extends AbstractController
             'email' => $user->getEmail(),
             'phoneNumber' => $user->getPhoneNumber(),
         ], 201);
+    }
+
+    #[Route('/api/profile', methods: ['PUT'], name: 'profile_update')]
+    public function update(
+        Request $request,
+        EntityManagerInterface $em,
+        SerializerInterface $serializer,
+        ValidatorInterface $validator,
+    ): Response
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        $dto = $serializer->deserialize($request->getContent(), UserUpdateDTO::class, 'json');
+
+        $errors = $validator->validate($dto);
+        if (count($errors) > 0) {
+            return $this->json(['errors' => (string) $errors], 400);
+        }
+
+        $user->setFirstName($dto->getFirstName());
+        $user->setLastName($dto->getLastName());
+        $user->setEmail($dto->getEmail());
+        $user->setPhoneNumber($dto->getPhoneNumber());
+
+        $em->flush();
+
+        return $this->json([
+            'firstName'   => $user->getFirstName(),
+            'lastName'    => $user->getLastName(),
+            'email'       => $user->getEmail(),
+            'phoneNumber' => $user->getPhoneNumber(),
+        ]);
     }
 
     #[Route('/api/profile', methods: ['GET'], name: 'profile')]
