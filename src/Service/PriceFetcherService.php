@@ -11,8 +11,12 @@ class PriceFetcherService
         private string $twelveDataApiKey
     ) {}
 
-    public function searchAssets(string $query): array
+    public function searchAssets(string $query, string $type = 'stock'): array
     {
+        if ($type === 'crypto') {
+            return $this->searchCryptos($query);
+        }
+
         try {
             $response = $this->httpClient->request('GET', 'https://api.twelvedata.com/symbol_search', [
                 'query' => [
@@ -32,9 +36,29 @@ class PriceFetcherService
                 'type'     => $item['instrument_type'],
             ], $data['data']), 0, 8);
         } catch (\Exception $e) {
-            // Log the error or handle it as needed
             return [];
+        }
+    }
 
+    public function searchCryptos(string $query): array
+    {
+        try {
+            $response = $this->httpClient->request('GET', 'https://api.coingecko.com/api/v3/search', [
+                'query' => ['query' => $query],
+            ]);
+
+            $data = $response->toArray();
+
+            if (empty($data['coins'])) return [];
+
+            return array_slice(array_map(fn($coin) => [
+                'symbol'   => $coin['id'],     // ex: "bitcoin" — utilisé pour fetchCryptoPrice
+                'name'     => $coin['name'],    // ex: "Bitcoin"
+                'exchange' => $coin['symbol'],  // ex: "BTC" — affiché comme tag
+                'type'     => 'Digital Currency',
+            ], $data['coins']), 0, 8);
+        } catch (\Exception $e) {
+            return [];
         }
     }
 

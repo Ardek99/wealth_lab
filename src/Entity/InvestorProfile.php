@@ -56,6 +56,18 @@ class InvestorProfile
     #[Groups(['investor_profile:read'])]
     private ?string $investingExperience = null;
 
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['investor_profile:read'])]
+    private ?string $professionalStatus = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['investor_profile:read'])]
+    private ?string $familyStatus = null;
+
+    #[ORM\Column(length: 10, nullable: true)]
+    #[Groups(['investor_profile:read'])]
+    private ?string $ageRange = null;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['investor_profile:read'])]
     private ?int $score = null;
@@ -172,6 +184,39 @@ class InvestorProfile
     public function setInvestingExperience(?string $investingExperience): static
     {
         $this->investingExperience = $investingExperience;
+        return $this;
+    }
+
+    public function getProfessionalStatus(): ?string
+    {
+        return $this->professionalStatus;
+    }
+
+    public function setProfessionalStatus(?string $professionalStatus): static
+    {
+        $this->professionalStatus = $professionalStatus;
+        return $this;
+    }
+
+    public function getFamilyStatus(): ?string
+    {
+        return $this->familyStatus;
+    }
+
+    public function setFamilyStatus(?string $familyStatus): static
+    {
+        $this->familyStatus = $familyStatus;
+        return $this;
+    }
+
+    public function getAgeRange(): ?string
+    {
+        return $this->ageRange;
+    }
+
+    public function setAgeRange(?string $ageRange): static
+    {
+        $this->ageRange = $ageRange;
         return $this;
     }
 

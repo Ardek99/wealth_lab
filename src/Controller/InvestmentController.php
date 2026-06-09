@@ -32,12 +32,13 @@ final class InvestmentController extends AbstractController
     public function search(Request $request, PriceFetcherService $priceFetcher): Response
     {
         $searchQuery = $request->query->get('q', '');
+        $type = $request->query->get('type', 'stock');
 
         if (strlen($searchQuery) < 2) {
             return $this->json([]);
         }
 
-        $results = $priceFetcher->searchAssets($searchQuery);
+        $results = $priceFetcher->searchAssets($searchQuery, $type);
 
         return $this->json($results);
     }

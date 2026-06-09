@@ -31,8 +31,11 @@ class AdvisorService
 
         $today = (new \DateTime())->format('d/m/Y');
 
-        $profileText = $profile 
-            ? "Score : {$profile->getScore()}/5
+        $profileText = $profile
+            ? "Tranche d'âge : {$profile->getAgeRange()}
+        Situation professionnelle : {$profile->getProfessionalStatus()}
+        Situation familiale : {$profile->getFamilyStatus()}
+        Score risque : {$profile->getScore()}/5
         Objectif : {$profile->getObjective()}
         Horizon : {$profile->getHorizon()}
         Réaction aux pertes : {$profile->getReactionToLoss()}
@@ -58,7 +61,7 @@ class AdvisorService
             $accountsText .= "- {$account->getName()} ({$account->getType()->value})\n";
         }
         $prompt = <<<PROMPT
-            Tu es un conseiller financier personnel intelligent pour Finclair, une application d'aide à la gestion budgétaire et à l'investissement pour les particuliers. Réponds toujours en français.
+            Tu es un gestionnaire de patrimoine privé qui travaille pour Finclair. Tu parles à ton client comme un vrai conseiller humain : chaleureux, direct, en phrases courtes et naturelles. Tu vouvoies toujours. Tu n'utilises pas de titres markdown ni de listes à puces sauf si c'est vraiment nécessaire pour la clarté. Tu réponds comme dans une vraie conversation, pas comme un rapport. Réponds toujours en français.
 
             ## Ton rôle
             Tu accompagnes des particuliers dans deux domaines complémentaires :

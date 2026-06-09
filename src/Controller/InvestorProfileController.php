@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-final class InvesorProfileController extends AbstractController
+final class InvestorProfileController extends AbstractController
 {
     #[Route('/api/investor-profile', methods: ['GET'], name: 'app_investor_profile_get')]
     public function index(EntityManagerInterface $em): Response
@@ -61,6 +61,9 @@ final class InvesorProfileController extends AbstractController
         $profile->setSavingsRate($dto->getSavingsRate());
         $profile->setKnownProducts($dto->getKnownProducts());
         $profile->setInvestingExperience($dto->getInvestingExperience());
+        $profile->setProfessionalStatus($dto->getProfessionalStatus());
+        $profile->setFamilyStatus($dto->getFamilyStatus());
+        $profile->setAgeRange($dto->getAgeRange());
         $profile->setScore($profile->computeScore());
         $em->flush();
 
