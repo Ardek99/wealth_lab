@@ -24,6 +24,7 @@ class InvestmentDTO
         #[Assert\NotBlank]
         #[Assert\Type("\DateTimeInterface")]
         private \DateTimeInterface $purchaseDate,
+        private ?int $accountId = null
     ) {
     }
 
@@ -55,5 +56,10 @@ class InvestmentDTO
     public function getPurchaseDate(): \DateTimeInterface
     {
         return $this->purchaseDate;
+    }
+
+    public function getAccountId(): ?int
+    {
+        return $this->accountId;
     }
 }

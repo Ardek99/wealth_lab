@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use App\Entity\Account;
 use App\Entity\User;
 use App\Enum\InvestmentType;
 use App\Service\PriceFetcherService;
@@ -80,6 +81,10 @@ final class InvestmentController extends AbstractController
         $investment->setQuantity($dto->getQuantity());
         $investment->setPurchasePrice($dto->getPurchasePrice());
         $investment->setPurchaseDate($dto->getPurchaseDate());
+        $account = $dto->getAccountId()
+            ? $em->getRepository(Account::class)->find($dto->getAccountId())
+            : null;
+        $investment->setAccount($account);
         $investment->setUser($user);
 
         $em->persist($investment);
@@ -129,6 +134,10 @@ final class InvestmentController extends AbstractController
         $investment->setQuantity($dto->getQuantity());
         $investment->setPurchasePrice($dto->getPurchasePrice());
         $investment->setPurchaseDate($dto->getPurchaseDate());
+        $account = $dto->getAccountId()
+            ? $em->getRepository(Account::class)->find($dto->getAccountId())
+            : null;
+        $investment->setAccount($account);
         $investment->setType($dto->getType());
 
         $em->flush();

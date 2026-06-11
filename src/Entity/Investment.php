@@ -54,6 +54,11 @@ class Investment
     #[ORM\JoinColumn(nullable: false)]
     private ?User $user = null;
 
+    #[ORM\ManyToOne(inversedBy: 'investments')]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['investment:read'])]
+    private ?Account $account = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -162,6 +167,18 @@ class Investment
     public function setUser(?User $user): static
     {
         $this->user = $user;
+
+        return $this;
+    }
+
+    public function getAccount(): ?Account
+    {
+        return $this->account;
+    }
+
+    public function setAccount(?Account $account): static
+    {
+        $this->account = $account;
 
         return $this;
     }
