@@ -34,6 +34,9 @@ class Transaction
     #[Groups(['transaction:read'])]
     private ?\DateTime $date = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $externalId = null;
+
     #[ORM\ManyToOne(inversedBy: 'transactions')]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['transaction:read'])]
@@ -98,6 +101,18 @@ class Transaction
     public function setDate(\DateTime $date): static
     {
         $this->date = $date;
+
+        return $this;
+    }
+
+    public function getExternalId(): ?string
+    {
+        return $this->externalId;
+    }
+
+    public function setExternalId(?string $externalId): static
+    {
+        $this->externalId = $externalId;
 
         return $this;
     }

@@ -68,12 +68,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: RecurringTransaction::class, mappedBy: 'user')]
     private Collection $recurringTransactions;
 
+    /**
+     * @var Collection<int, BankConnection>
+     */
+    #[ORM\OneToMany(targetEntity: BankConnection::class, mappedBy: 'user')]
+    private Collection $bankConnections;
+
     public function __construct()
     {
         $this->accounts = new ArrayCollection();
         $this->goals = new ArrayCollection();
-$this->investments = new ArrayCollection();
-$this->recurringTransactions = new ArrayCollection();
+        $this->investments = new ArrayCollection();
+        $this->recurringTransactions = new ArrayCollection();
+        $this->bankConnections = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -301,6 +308,36 @@ $this->recurringTransactions = new ArrayCollection();
             // set the owning side to null (unless already changed)
             if ($recurringTransaction->getUser() === $this) {
                 $recurringTransaction->setUser(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, BankConnection>
+     */
+    public function getBankConnections(): Collection
+    {
+        return $this->bankConnections;
+    }
+
+    public function addBankConnection(BankConnection $bankConnection): static
+    {
+        if (!$this->bankConnections->contains($bankConnection)) {
+            $this->bankConnections->add($bankConnection);
+            $bankConnection->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removeBankConnection(BankConnection $bankConnection): static
+    {
+        if ($this->bankConnections->removeElement($bankConnection)) {
+            // set the owning side to null (unless already changed)
+            if ($bankConnection->getUser() === $this) {
+                $bankConnection->setUser(null);
             }
         }
 

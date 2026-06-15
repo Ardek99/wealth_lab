@@ -24,7 +24,9 @@ class InvestmentDTO
         #[Assert\NotBlank]
         #[Assert\Type("\DateTimeInterface")]
         private \DateTimeInterface $purchaseDate,
-        private ?int $accountId = null
+        private ?int $accountId = null,
+        #[Assert\Positive]
+        private ?float $currentPrice = null,
     ) {
     }
 
@@ -61,5 +63,10 @@ class InvestmentDTO
     public function getAccountId(): ?int
     {
         return $this->accountId;
+    }
+
+    public function getCurrentPrice(): ?float
+    {
+        return $this->currentPrice;
     }
 }

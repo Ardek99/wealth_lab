@@ -24,13 +24,24 @@ class Account
     #[Groups(['account:read', 'transaction:read'])]
     private ?string $name = null;
 
+    #[ORM\Column(type: Types::DECIMAL, precision: 15, scale: 2, nullable: true)]
+    #[Groups(['account:read'])]
+    private ?string $balance = null;
+
     #[ORM\Column(enumType: AccountType::class)]
     #[Groups(['account:read'])]
     private ?AccountType $type = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $externalId = null;
+
     #[ORM\ManyToOne(inversedBy: 'accounts')]
     #[ORM\JoinColumn(nullable: false)]
     private ?User $user = null;
+
+    #[ORM\ManyToOne(targetEntity: BankConnection::class, inversedBy: 'accounts')]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?BankConnection $bankConnection = null;
 
     /**
      * @var Collection<int, Transaction>
@@ -67,6 +78,18 @@ class Account
         return $this;
     }
 
+    public function getBalance(): ?string
+    {
+        return $this->balance;
+    }
+
+    public function setBalance(string $balance): static
+    {
+        $this->balance = $balance;
+
+        return $this;
+    }
+
     public function getType(): ?AccountType
     {
         return $this->type;
@@ -79,6 +102,18 @@ class Account
         return $this;
     }
 
+    public function getExternalId(): ?string
+    {
+        return $this->externalId;
+    }
+
+    public function setExternalId(?string $externalId): static
+    {
+        $this->externalId = $externalId;
+
+        return $this;
+    }
+
     public function getUser(): ?User
     {
         return $this->user;
@@ -87,6 +122,18 @@ class Account
     public function setUser(?User $user): static
     {
         $this->user = $user;
+
+        return $this;
+    }
+
+    public function getBankConnection(): ?BankConnection
+    {
+        return $this->bankConnection;
+    }
+
+    public function setBankConnection(?BankConnection $bankConnection): static
+    {
+        $this->bankConnection = $bankConnection;
 
         return $this;
     }

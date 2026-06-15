@@ -60,6 +60,7 @@ final class AccountController extends AbstractController
 
         $account = new Account();
         $account->setName($dto->getName());
+        $account->setBalance($dto->getBalance() ?? 0);
         $account->setType($dto->getType());
         $account->setUser($user);
 
@@ -94,6 +95,7 @@ final class AccountController extends AbstractController
         }
 
         $account->setName($dto->getName());
+        $account->setBalance($dto->getBalance());
         $account->setType($dto->getType());
 
         $em->flush();

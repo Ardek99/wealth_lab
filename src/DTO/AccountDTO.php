@@ -11,6 +11,9 @@ class AccountDTO
         #[Assert\NotBlank]
         #[Assert\Length(min: 2, max: 255)]
         private string $name,
+        
+        #[Assert\Type('numeric')]
+        private ?string $balance,
 
         #[Assert\NotNull]
         private AccountType $type,
@@ -20,6 +23,11 @@ class AccountDTO
     public function getName(): string
     {
         return $this->name;
+    }
+
+    public function getBalance(): ?string
+    {
+        return $this->balance;
     }
 
     public function getType(): AccountType

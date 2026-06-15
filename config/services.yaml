@@ -29,3 +29,11 @@ services:
     App\Service\AdvisorService:
         arguments:
             $claudeApiKey: '%env(ANTHROPIC_API_KEY)%'
+
+    App\Service\CredentialEncryptionService:
+        arguments:
+            $encryptionKey: '%env(BANK_SYNC_ENCRYPTION_KEY)%'
+
+    App\Service\BankSyncService:
+        arguments:
+            $syncUrl: '%env(WOOB_SYNC_URL)%'

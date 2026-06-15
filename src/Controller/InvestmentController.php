@@ -89,15 +89,20 @@ final class InvestmentController extends AbstractController
 
         $em->persist($investment);
 
-        $price = match($investment->getType()) {
-            InvestmentType::CRYPTO => $priceFetcher->fetchCryptoPrice($investment->getTicker()),
-            InvestmentType::OTHER  => null,
-            default                => $priceFetcher->fetchStockPrice($investment->getTicker()),
-        };
-
-        if ($price !== null && $investment->getTicker()) {
-            $investment->setCurrentPrice((string) $price);
+        if ($dto->getCurrentPrice() !== null) {
+            $investment->setCurrentPrice((string) $dto->getCurrentPrice());
             $investment->setCurrentPriceUpdatedAt(new \DateTime());
+        } else {
+            $price = match($investment->getType()) {
+                InvestmentType::CRYPTO => $priceFetcher->fetchCryptoPrice($investment->getTicker()),
+                InvestmentType::OTHER  => null,
+                default                => $priceFetcher->fetchStockPrice($investment->getTicker()),
+            };
+
+            if ($price !== null && $investment->getTicker()) {
+                $investment->setCurrentPrice((string) $price);
+                $investment->setCurrentPriceUpdatedAt(new \DateTime());
+            }
         }
         $em->flush();
 
@@ -139,6 +144,11 @@ final class InvestmentController extends AbstractController
             : null;
         $investment->setAccount($account);
         $investment->setType($dto->getType());
+
+        if ($dto->getCurrentPrice() !== null) {
+            $investment->setCurrentPrice((string) $dto->getCurrentPrice());
+            $investment->setCurrentPriceUpdatedAt(new \DateTime());
+        }
 
         $em->flush();
 
