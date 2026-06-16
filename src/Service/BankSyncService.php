@@ -19,6 +19,7 @@ class BankSyncService
         private CredentialEncryptionService $encryptionService,
         private EntityManagerInterface $em,
         private CategoryRepository $categoryRepository,
+        private RecurringTransactionDetector $recurringDetector,
         private string $syncUrl,
     ) {}
 
@@ -98,5 +99,7 @@ class BankSyncService
         $connection->setLastErrorMessage(null);
         $connection->setLastSyncDate(new \DateTime());
         $this->em->flush();
+
+        $this->recurringDetector->detectForUser($user);
     }
 }
