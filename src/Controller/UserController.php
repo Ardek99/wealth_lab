@@ -95,6 +95,7 @@ final class UserController extends AbstractController
             'lastName'    => $user->getLastName(),
             'email'       => $user->getEmail(),
             'phoneNumber' => $user->getPhoneNumber(),
+            'periodStartDay' => $user->getPeriodStartDay(),
         ]);
     }
 
@@ -113,6 +114,20 @@ final class UserController extends AbstractController
             'lastName' => $user->getLastName(),
             'email' => $user->getEmail(),
             'phoneNumber' => $user->getPhoneNumber(),
+            'periodStartDay' => $user->getPeriodStartDay(),
         ]);
+    }
+
+    #[Route('/api/profile/period', methods: ['PATCH'], name: 'profile_period')]
+    public function updatePeriod(Request $request, EntityManagerInterface $em): Response
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $data = json_decode($request->getContent(), true);
+        $day = max(1, min(28, (int) ($data['periodStartDay'] ?? 1)));
+        $user->setPeriodStartDay($day);
+        $em->flush();
+
+        return $this->json(['periodStartDay' => $day]);
     }
 }

@@ -89,7 +89,7 @@ class TransactionRepository extends ServiceEntityRepository
         return (int) $qb->getQuery()->getSingleScalarResult();
     }
 
-    public function getMonthlyIncome(User $user): float
+    public function getMonthlyIncome(User $user, \DateTime $from, \DateTime $to): float
     {
         $result = $this->createQueryBuilder('t')
             ->select('SUM(t.amount) as income')
@@ -100,8 +100,8 @@ class TransactionRepository extends ServiceEntityRepository
             ->andWhere('t.date <= :end')
             ->setParameter('user', $user)
             ->setParameter('type', TransactionType::INCOME)
-            ->setParameter('start', (new \DateTime())->modify('first day of this month')->format('Y-m-d'))
-            ->setParameter('end', (new \DateTime())->modify('last day of this month')->format('Y-m-d'))
+            ->setParameter('start', $from->format('Y-m-d'))
+            ->setParameter('end', $to->format('Y-m-d'))
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -109,10 +109,10 @@ class TransactionRepository extends ServiceEntityRepository
         return (float) $result;
     }
 
-    public function getMonthlyExpenses(User $user): float
+    public function getMonthlyExpenses(User $user, \DateTime $from, \DateTime $to): float
     {
-            $result = $this->createQueryBuilder('t')
-            ->select('SUM(t.amount) as expense')
+        $result = $this->createQueryBuilder('t')
+            ->select('ABS(SUM(t.amount)) as expense')
             ->join('t.account', 'a')
             ->andWhere('a.user = :user')
             ->andWhere('t.type = :type')
@@ -120,8 +120,8 @@ class TransactionRepository extends ServiceEntityRepository
             ->andWhere('t.date <= :end')
             ->setParameter('user', $user)
             ->setParameter('type', TransactionType::EXPENSE)
-            ->setParameter('start', (new \DateTime())->modify('first day of this month')->format('Y-m-d'))
-            ->setParameter('end', (new \DateTime())->modify('last day of this month')->format('Y-m-d'))
+            ->setParameter('start', $from->format('Y-m-d'))
+            ->setParameter('end', $to->format('Y-m-d'))
             ->getQuery()
             ->getSingleScalarResult()
         ;
@@ -129,7 +129,7 @@ class TransactionRepository extends ServiceEntityRepository
         return (float) $result;
     }
 
-    public function getTopCategories(User $user): array
+    public function getTopCategories(User $user, \DateTime $from, \DateTime $to): array
     {
         $result = $this->createQueryBuilder('t')
             ->select('SUM(t.amount) as total, c.name as category')
@@ -141,8 +141,8 @@ class TransactionRepository extends ServiceEntityRepository
             ->andWhere('t.date <= :end')
             ->setParameter('user', $user)
             ->setParameter('type', TransactionType::EXPENSE)
-            ->setParameter('start', (new \DateTime())->modify('first day of this month')->format('Y-m-d'))
-            ->setParameter('end', (new \DateTime())->modify('last day of this month')->format('Y-m-d'))
+            ->setParameter('start', $from->format('Y-m-d'))
+            ->setParameter('end', $to->format('Y-m-d'))
             ->groupBy('c.id')
             ->orderBy('total', 'DESC')
             ->setMaxResults(5)
@@ -218,23 +218,29 @@ class TransactionRepository extends ServiceEntityRepository
         return (float) ($result ?? 0);
     }
 
-    public function getMonthlyEvolution(User $user, int $months = 6): array
+    public function getMonthlyEvolution(User $user, int $months = 6, int $periodStartDay = 1): array
     {
         $result = [];
         for ($i = $months - 1; $i >= 0; $i--) {
-            $date  = new \DateTime("first day of -$i months");
-            $start = (clone $date)->format('Y-m-01');
-            $end   = (clone $date)->format('Y-m-t');
+            $date = new \DateTime("first day of -$i months");
 
-            $income = $this->sumByType($user, TransactionType::INCOME,
-                new \DateTime($start), new \DateTime($end));
-            $expenses = $this->sumByType($user, TransactionType::EXPENSE,
-                new \DateTime($start), new \DateTime($end));
+            if ($periodStartDay <= 1) {
+                $start = new \DateTime($date->format('Y-m-01'));
+                $end   = new \DateTime($date->format('Y-m-t'));
+            } else {
+                $start = (clone $date)->modify('-1 month');
+                $start->setDate((int)$start->format('Y'), (int)$start->format('m'), $periodStartDay);
+                $end = clone $date;
+                $end->setDate((int)$end->format('Y'), (int)$end->format('m'), $periodStartDay - 1);
+            }
+
+            $income   = $this->sumByType($user, TransactionType::INCOME,  $start, $end);
+            $expenses = $this->sumByType($user, TransactionType::EXPENSE, $start, $end);
 
             $result[] = [
-                'month' => ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'][(int)$date->format('n') - 1],
+                'month'    => ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'][(int)$date->format('n') - 1],
                 'income'   => $income,
-                'expenses' => $expenses,
+                'expenses' => abs($expenses),
             ];
         }
         return $result;

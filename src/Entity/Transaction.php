@@ -10,6 +10,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: TransactionRepository::class)]
 #[ORM\Table(name: '`transactions`')]
+#[ORM\UniqueConstraint(name: 'uniq_transaction_account_external', columns: ['account_id', 'external_id'])]
 class Transaction
 {
     #[ORM\Id]

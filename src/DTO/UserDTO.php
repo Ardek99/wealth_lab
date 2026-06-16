@@ -25,6 +25,7 @@ class UserDTO
             message: 'Password must be at least 8 characters, with letters, numbers and a special character.'
         )]
         public string $password = '',
+        public ?int $periodStartDay = null
     ) {
     }
 
@@ -56,5 +57,10 @@ class UserDTO
     public function getPhoneNumber(): ?string
     {
         return $this->phoneNumber;
+    }
+
+    public function getPeriodStartDay(): ?int
+    {
+        return $this->periodStartDay;
     }
 }

@@ -32,6 +32,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 180, unique: true)]
     private ?string $phoneNumber = null;
 
+    #[ORM\Column(options: ['default' => 1])]
+    private int $periodStartDay = 1;
+
     /**
      * @var list<string> The user roles
      */
@@ -132,6 +135,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPhoneNumber(string $phoneNumber): static
     {
         $this->phoneNumber = $phoneNumber;
+
+        return $this;
+    }
+
+    public function getPeriodStartDay(): int
+    {
+        return $this->periodStartDay;
+    }
+
+    public function setPeriodStartDay(int $periodStartDay): static
+    {
+        $this->periodStartDay = $periodStartDay;
 
         return $this;
     }
