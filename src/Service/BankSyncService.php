@@ -25,7 +25,7 @@ class BankSyncService
 
     public function sync(BankConnection $connection): void
     {
-        set_time_limit(120);
+        set_time_limit(600);
 
         $config = $this->encryptionService->decrypt($connection->getCredentials());
 
@@ -35,7 +35,7 @@ class BankSyncService
                 'config' => $config,
                 'since' => (new \DateTime('-3 months'))->format('Y-m-d'),
             ],
-            'timeout' => 120,
+            'timeout' => 600,
         ]);
         $data = $response->toArray(false);
 
