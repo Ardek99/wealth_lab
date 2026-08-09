@@ -30,6 +30,10 @@ services:
         arguments:
             $claudeApiKey: '%env(ANTHROPIC_API_KEY)%'
 
+    App\Service\TransactionCategorizerService:
+        arguments:
+            $claudeApiKey: '%env(ANTHROPIC_API_KEY)%'
+
     App\Service\CredentialEncryptionService:
         arguments:
             $encryptionKey: '%env(BANK_SYNC_ENCRYPTION_KEY)%'

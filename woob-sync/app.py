@@ -1,10 +1,12 @@
+import logging
 import os
 import traceback
 from datetime import date, datetime
 
 from flask import Flask, jsonify, request
 from woob.browser.exceptions import ClientError
-from woob.capabilities.bank import Account, Transaction
+from woob.capabilities.bank import Account, Investment, Transaction
+from woob.capabilities.base import empty
 from woob.capabilities.captcha import CaptchaQuestion
 from woob.core import Woob
 from woob.exceptions import (
@@ -17,6 +19,7 @@ from woob.exceptions import (
 )
 
 app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
 
 ACCOUNT_TYPE_MAP = {
     Account.TYPE_CHECKING: "checking",
@@ -55,6 +58,31 @@ def map_account_type(woob_type) -> str:
     return ACCOUNT_TYPE_MAP.get(woob_type, "checking")
 
 
+# Account types that can hold actual securities (as opposed to just cash) —
+# only these are worth calling iter_investment() for.
+INVESTMENT_ACCOUNT_TYPES = {
+    Account.TYPE_MARKET,
+    Account.TYPE_PEA,
+    Account.TYPE_LIFE_INSURANCE,
+    Account.TYPE_PER,
+}
+
+# Modules confirmed to scrape a real per-transaction spending category from
+# the bank's own site (not just a free-text field repurposed for something
+# else, e.g. cragr's `category` is actually an OFX memo field — see its
+# pages.py comment). Only trust `tr.category` from modules listed here.
+TRUSTED_NATIVE_CATEGORY_MODULES = {"boursorama"}
+
+# Modules confirmed to return a genuinely stable transaction `.id` across
+# separate syncs (boursorama's comes from a real DOM data-id attribute).
+# cragr's `.id` looks real (read straight from its API's JSON "id" field)
+# but empirically changes between syncs for the same transaction — every
+# resync re-imported everything as "new", producing duplicates. Default to
+# NOT trusting `.id` (falling back to a label+date+amount composite key)
+# unless a module is proven stable here.
+STABLE_TRANSACTION_ID_MODULES = {"boursorama"}
+
+
 def _patch_boursorama() -> None:
     """Boursorama serves a stub page first (sets the __brs_mit cookie via JS,
     then reloads) before the real login page. woob_modules.boursorama's
@@ -91,6 +119,15 @@ def _patch_boursorama() -> None:
         params["movementSearch[fromDate]"] = from_date.strftime("%d/%m/%Y")
         params["movementSearch[advanced]"] = 1
         if self.otp_location("%s/mouvements" % account.url.rstrip("/"), params=params) is None:
+            return
+
+        if not hasattr(self.page, "get_json_config"):
+            # PEA/market accounts' /mouvements lands on SavingMarketPage, not
+            # HistoryPage — a simpler page with no get_json_config/operation-detail
+            # enrichment step. Its iter_history() already returns real
+            # Transaction objects (buy/sell trades, cash transfers), just use
+            # it directly instead of assuming HistoryPage's richer flow.
+            yield from self.page.iter_history()
             return
 
         json_config = self.page.get_json_config()
@@ -147,23 +184,77 @@ def dump_debug_page(backend, label: str) -> None:
         app.logger.error("debug dump failed: %s", traceback.format_exc())
 
 
-def transaction_external_id(tr: Transaction) -> str:
-    if tr.id:
+def transaction_external_id(tr: Transaction, trust_id: bool) -> str:
+    if trust_id and tr.id:
         return str(tr.id)
     return f"{tr.raw}-{tr.date}-{tr.amount}"
 
 
-def serialize_transaction(tr: Transaction) -> dict:
+def serialize_transaction(tr: Transaction, trust_native_category: bool, trust_id: bool) -> dict:
     tr_date = tr.rdate or tr.date
+    native_category = tr.category if trust_native_category and not empty(tr.category) else None
     return {
-        "externalId": transaction_external_id(tr),
+        "externalId": transaction_external_id(tr, trust_id),
         "label": tr.label or tr.raw,
         "amount": float(tr.amount),
         "date": tr_date.isoformat() if hasattr(tr_date, "isoformat") else str(tr_date),
+        "nativeCategory": native_category,
     }
 
 
-def serialize_account(backend, account: Account, since: date) -> dict:
+def investment_external_id(inv: Investment) -> str:
+    if inv.id:
+        return str(inv.id)
+    return f"{inv.code}-{inv.label}"
+
+
+def serialize_investments(backend, account: Account) -> list:
+    investments = []
+    try:
+        for inv in backend.iter_investment(account):
+            unit_price = inv.unitvalue if empty(inv.unitprice) else inv.unitprice
+            if empty(unit_price):
+                # Neither cost basis nor current price available — nothing
+                # meaningful to persist for this holding, skip it.
+                continue
+            investments.append({
+                "externalId": investment_external_id(inv),
+                "label": inv.label,
+                "ticker": None if empty(inv.code) else inv.code,
+                "quantity": float(inv.quantity),
+                "unitPrice": float(unit_price),
+                "currentPrice": None if empty(inv.unitvalue) else float(inv.unitvalue),
+            })
+    except Exception as e:
+        app.logger.warning(
+            "investment fetch failed for account %s (%s): keeping %d investments",
+            account.id,
+            type(e).__name__,
+            len(investments),
+        )
+    return investments
+
+
+def disambiguate_duplicate_external_ids(transactions: list) -> None:
+    """The content-based fallback key (label+date+amount, used when a bank's
+    own transaction id isn't trustworthy — see STABLE_TRANSACTION_ID_MODULES)
+    collides when the same merchant charges the same amount more than once
+    on the same day — two genuinely different transactions, but an identical
+    generated id, which trips the DB's uniqueness constraint on flush and
+    fails the whole sync. Mutates in place: repeats get a "-2", "-3", ...
+    suffix so they're still stable across syncs (same order in the list ==
+    same suffix) without colliding."""
+    seen = {}
+    for tx in transactions:
+        key = tx["externalId"]
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] > 1:
+            tx["externalId"] = f"{key}-{seen[key]}"
+
+
+def serialize_account(backend, account: Account, since: date, module: str) -> dict:
+    trust_native_category = module in TRUSTED_NATIVE_CATEGORY_MODULES
+    trust_id = module in STABLE_TRANSACTION_ID_MODULES
     transactions = []
     try:
         for tr in backend.iter_history(account):
@@ -172,7 +263,7 @@ def serialize_account(backend, account: Account, since: date) -> dict:
                 tr_date = tr_date.date()
             if tr_date and tr_date < since:
                 continue
-            transactions.append(serialize_transaction(tr))
+            transactions.append(serialize_transaction(tr, trust_native_category, trust_id))
     except ClientError as e:
         # Boursorama (and possibly others) returns 401 when history pagination
         # goes further back than it allows without an extra OTP step. Treat it
@@ -197,12 +288,19 @@ def serialize_account(backend, account: Account, since: date) -> dict:
             len(transactions),
         )
 
+    disambiguate_duplicate_external_ids(transactions)
+
+    investments = []
+    if account.type in INVESTMENT_ACCOUNT_TYPES:
+        investments = serialize_investments(backend, account)
+
     return {
         "externalId": str(account.id),
         "label": account.label,
         "balance": float(account.balance),
         "type": map_account_type(account.type),
         "transactions": transactions,
+        "investments": investments,
     }
 
 
@@ -233,7 +331,7 @@ def sync():
 
         try:
             accounts = [
-                serialize_account(backend, account, since)
+                serialize_account(backend, account, since, module)
                 for account in backend.iter_accounts()
             ]
         except BrowserIncorrectPassword as e:

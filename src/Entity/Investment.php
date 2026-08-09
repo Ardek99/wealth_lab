@@ -4,6 +4,8 @@ namespace App\Entity;
 
 use App\Enum\InvestmentType;
 use App\Repository\InvestmentRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -58,6 +60,20 @@ class Investment
     #[ORM\JoinColumn(nullable: true)]
     #[Groups(['investment:read'])]
     private ?Account $account = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $externalId = null;
+
+    /**
+     * @var Collection<int, InvestmentOrder>
+     */
+    #[ORM\OneToMany(targetEntity: InvestmentOrder::class, mappedBy: 'investment', cascade: ['remove'])]
+    private Collection $orders;
+
+    public function __construct()
+    {
+        $this->orders = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -181,6 +197,26 @@ class Investment
         $this->account = $account;
 
         return $this;
+    }
+
+    public function getExternalId(): ?string
+    {
+        return $this->externalId;
+    }
+
+    public function setExternalId(?string $externalId): static
+    {
+        $this->externalId = $externalId;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, InvestmentOrder>
+     */
+    public function getOrders(): Collection
+    {
+        return $this->orders;
     }
 
     #[Groups(['investment:read'])]

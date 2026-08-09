@@ -46,13 +46,28 @@ final class InvestmentController extends AbstractController
 
     #[Route('/api/investments/{id}', methods: ['GET'], name: 'app_investment_one')]
     public function getOne(int $id, EntityManagerInterface $em): Response
-    {        
+    {
         /** @var User $user */
         $user = $this->getUser();
 
         $investment = $em->getRepository(Investment::class)->findOneBy(['id' => $id, 'user' => $user]);
 
         return $this->json($investment, 200, [], ['groups' => ['investment:read']]);
+    }
+
+    #[Route('/api/investments/{id}/orders', methods: ['GET'], name: 'app_investment_orders')]
+    public function getOrders(int $id, EntityManagerInterface $em): Response
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+
+        $investment = $em->getRepository(Investment::class)->findOneBy(['id' => $id, 'user' => $user]);
+
+        if (!$investment) {
+            return $this->json(['message' => 'Investment not found'], 404);
+        }
+
+        return $this->json($investment->getOrders(), 200, [], ['groups' => ['investment_order:read']]);
     }
 
     #[Route('/api/investments', methods: ['POST'], name: 'app_investment_create')]
