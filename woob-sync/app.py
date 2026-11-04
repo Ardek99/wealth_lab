@@ -10,6 +10,7 @@ from woob.capabilities.base import empty
 from woob.capabilities.captcha import CaptchaQuestion
 from woob.core import Woob
 from woob.exceptions import (
+    ActionNeeded,
     AppValidationError,
     BrowserIncorrectPassword,
     BrowserInteraction,
@@ -343,6 +344,14 @@ def sync():
         except (BrowserInteraction, NeedInteractive, AppValidationError) as e:
             app.logger.warning("2fa_required: %s", traceback.format_exc())
             return jsonify(status="2fa_required", message=str(e) or type(e).__name__)
+        except ActionNeeded as e:
+            # Something has to be done by hand on the bank's own website before
+            # any sync can work again (cragr raises this when the CA serves a
+            # Friendly captcha, which only a manual login clears). Distinct from
+            # 2fa_required: no amount of retrying from here will help, so the
+            # message is the only actionable part — pass it through.
+            app.logger.warning("action_needed: %s", traceback.format_exc())
+            return jsonify(status="action_needed", message=str(e) or type(e).__name__)
         except Exception as e:
             app.logger.error("sync error: %s", traceback.format_exc())
             dump_debug_page(backend, "sync_failure")

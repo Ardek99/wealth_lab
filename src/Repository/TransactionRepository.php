@@ -153,6 +153,66 @@ class TransactionRepository extends ServiceEntityRepository
         return $result;
     }
 
+    /**
+     * Toutes les transactions d'une periode, categorie chargee en une seule requete.
+     * Contrairement a getRecentTransactions(), pas de plafond a 5 : destine a l'analyse
+     * detaillee (conseiller IA), pas a un widget.
+     *
+     * @return Transaction[]
+     */
+    public function findForPeriod(User $user, \DateTime $from, \DateTime $to, int $limit = 400): array
+    {
+        return $this->createQueryBuilder('t')
+            ->addSelect('c')
+            ->join('t.account', 'a')
+            ->leftJoin('t.category', 'c')
+            ->andWhere('a.user = :user')
+            ->andWhere('t.date >= :start')
+            ->andWhere('t.date <= :end')
+            ->setParameter('user', $user)
+            ->setParameter('start', $from->format('Y-m-d'))
+            ->setParameter('end', $to->format('Y-m-d'))
+            ->orderBy('t.date', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult()
+        ;
+    }
+
+    /**
+     * Depenses totalisees par categorie sur une periode, sans plafond.
+     * getTopCategories() se limite aux 5 premieres : ici on veut la ventilation complete.
+     *
+     * @return array<string, float> nom de categorie => montant depense (positif)
+     */
+    public function getCategoryTotals(User $user, \DateTime $from, \DateTime $to): array
+    {
+        $rows = $this->createQueryBuilder('t')
+            ->select('c.name as category, ABS(SUM(t.amount)) as total')
+            ->join('t.account', 'a')
+            ->join('t.category', 'c')
+            ->andWhere('a.user = :user')
+            ->andWhere('t.type = :type')
+            ->andWhere('t.date >= :start')
+            ->andWhere('t.date <= :end')
+            ->setParameter('user', $user)
+            ->setParameter('type', TransactionType::EXPENSE)
+            ->setParameter('start', $from->format('Y-m-d'))
+            ->setParameter('end', $to->format('Y-m-d'))
+            ->groupBy('c.id')
+            ->orderBy('total', 'DESC')
+            ->getQuery()
+            ->getResult()
+        ;
+
+        $totals = [];
+        foreach ($rows as $row) {
+            $totals[$row['category']] = (float) $row['total'];
+        }
+
+        return $totals;
+    }
+
     public function getRecentTransactions(User $user): array
     {
         $result = $this->createQueryBuilder('t')

@@ -5,33 +5,78 @@ namespace App\Service;
 use App\Entity\Account;
 use App\Entity\Goal;
 use App\Entity\InvestorProfile;
+use App\Entity\RecurringTransaction;
+use App\Entity\Transaction;
 use App\Entity\User;
 use App\Entity\Investment;
 use App\Enum\BudgetGroupType;
+use App\Enum\TransactionType;
 use App\Repository\TransactionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class AdvisorService
 {
+    private const SYSTEM_PROMPT_PATH = 'config/prompts/advisor_system.md';
+
+    /** Nombre de mois d'historique agrege transmis au modele. */
+    private const HISTORY_MONTHS = 6;
+
+    /** Plafond de transactions detaillees transmises (garde-fou sur la taille du contexte). */
+    private const MAX_TRANSACTIONS = 400;
+
+    private ?string $instructions = null;
+
     public function __construct(
         private EntityManagerInterface $em,
         private HttpClientInterface $httpClient,
         private TransactionRepository $transactionRepository,
         private string $claudeApiKey,
+        private string $projectDir,
     ){}
 
+    /**
+     * Instructions statiques du conseiller, lues depuis config/prompts/advisor_system.md.
+     * Identiques pour tous les utilisateurs : c'est cette partie qui est mise en cache
+     * cote API, donc elle ne doit jamais contenir de donnee variable (date, montants...).
+     */
+    public function getInstructions(): string
+    {
+        if ($this->instructions === null) {
+            $path = $this->projectDir . '/' . self::SYSTEM_PROMPT_PATH;
+            $content = file_get_contents($path);
+
+            if ($content === false) {
+                throw new \RuntimeException(sprintf('Prompt systeme introuvable : %s', $path));
+            }
+
+            $this->instructions = rtrim($content);
+        }
+
+        return $this->instructions;
+    }
+
     public function buildSystemPrompt(User $user): string
+    {
+        return $this->getInstructions() . "\n\n" . $this->buildUserContext($user);
+    }
+
+    /**
+     * Donnees financieres du client, recalculees a chaque requete.
+     */
+    public function buildUserContext(User $user): string
     {
         $profile = $this->em->getRepository(InvestorProfile::class)->findOneBy(['user' => $user]);
         $accounts = $this->em->getRepository(Account::class)->findBy(['user' => $user]);
         $goals = $this->em->getRepository(Goal::class)->findBy(['user' => $user]);
         $investments = $this->em->getRepository(Investment::class)->findBy(['user' => $user]);
-        $income   = $this->transactionRepository->getMonthlyIncome($user);
-        $expenses = $this->transactionRepository->getMonthlyExpenses($user);
-
+        // Meme fenetre que le dashboard (DashboardController::overview).
         $monthStart = (new \DateTime())->modify('first day of this month');
         $monthEnd   = (new \DateTime())->modify('last day of this month');
+
+        $income   = $this->transactionRepository->getMonthlyIncome($user, $monthStart, $monthEnd);
+        $expenses = $this->transactionRepository->getMonthlyExpenses($user, $monthStart, $monthEnd);
+
         $needs   = $this->transactionRepository->sumByBudgetGroup($user, BudgetGroupType::NEEDS, $monthStart, $monthEnd);
         $wants   = $this->transactionRepository->sumByBudgetGroup($user, BudgetGroupType::WANTS, $monthStart, $monthEnd);
         $savingsAmount = $income - $needs - $wants;
@@ -68,8 +113,9 @@ class AdvisorService
 
         $today = (new \DateTime())->format('d/m/Y');
 
-        $profileText = $profile
-            ? "Tranche d'âge : {$profile->getAgeRange()}
+        if ($profile) {
+            $profileText = <<<TEXT
+                Tranche d'âge : {$profile->getAgeRange()}
                 Situation professionnelle : {$profile->getProfessionalStatus()}
                 Situation familiale : {$profile->getFamilyStatus()}
                 Score risque : {$profile->getScore()}/5
@@ -80,8 +126,11 @@ class AdvisorService
                 Perte max acceptable : {$profile->getMaxLoss()}
                 Épargne de précaution : {$profile->getEmergencyFund()}
                 Taux d'épargne : {$profile->getSavingsRate()}
-                Expérience : {$profile->getInvestingExperience()}"
-            : "Profil non renseigné.";
+                Expérience : {$profile->getInvestingExperience()}
+                TEXT;
+        } else {
+            $profileText = 'Profil non renseigné.';
+        }
 
         $investmentText = '';
         $portfolioValue = 0;
@@ -103,6 +152,14 @@ class AdvisorService
             $goalsText .= "- {$goal->getName()} : {$current} € / {$target} € ({$progressPercent} % atteint, {$remaining} € restants, échéance {$goal->getTargetDate()->format('d/m/Y')})\n";
         }
 
+        $transactions = $this->transactionRepository->findForPeriod($user, $monthStart, $monthEnd, self::MAX_TRANSACTIONS);
+        $recurring    = $this->em->getRepository(RecurringTransaction::class)->findBy(['user' => $user]);
+
+        $transactionsText = $this->formatTransactions($transactions);
+        $recurringText    = $this->formatRecurring($recurring);
+        $evolutionText    = $this->formatMonthlyEvolution($user);
+        $categoryText     = $this->formatCategoryHistory($user);
+
         $accountsText = '';
         $totalBalance = 0;
         foreach ($accounts as $account) {
@@ -110,57 +167,21 @@ class AdvisorService
             $accountsText .= "- {$account->getName()} ({$account->getType()->value}) : solde {$balance} €\n";
             $totalBalance += (float) $balance;
         }
-        $prompt = <<<PROMPT
-            Tu es un gestionnaire de patrimoine privé qui travaille pour Finclair. Tu parles à ton client comme un vrai conseiller humain : chaleureux, direct, en phrases courtes et naturelles. Tu vouvoies toujours. Tu n'utilises pas de titres markdown ni de listes à puces sauf si c'est vraiment nécessaire pour la clarté. Tu réponds comme dans une vraie conversation, pas comme un rapport. Réponds toujours en français.
-
-            ## Ton rôle
-            Tu accompagnes des particuliers dans deux domaines complémentaires :
-            1. **Optimisation budgétaire** — analyser les dépenses, identifier les gaspillages, proposer des économies concrètes
-            2. **Conseil en investissement** — guider vers des placements adaptés au profil, aux objectifs et à l'horizon de l'utilisateur
-
-            ## Ce que tu connais de l'utilisateur
-            Tu as accès en temps réel aux données financières de l'utilisateur :
-            - Revenus et dépenses mensuels, catégorisés
-            - Profil investisseur complet (objectif, horizon, tolérance au risque)
-            - Portefeuille d'investissement avec valeurs actuelles et plus/moins-values
-            - Objectifs financiers avec progression
-            - Comptes bancaires
-
-            ## Tes règles de conduite
-            **Sois concret et actionnable.** Chaque conseil doit déboucher sur une action précise : un montant à économiser, un virement à planifier, un produit à comparer.
-            **Sois pédagogue, pas condescendant.** Explique les concepts simplement (ETF, PEA, fonds euros…) sans jargon excessif.
-            **Priorise les gains rapides.** Commence par les optimisations à fort impact et faible effort (abonnements, assurances, énergie) avant les réformes structurelles.
-            **Ne spécule jamais.** Ne promets aucun rendement. Parle en termes de probabilités historiques et de fourchettes raisonnables. Rappelle toujours que les marchés comportent un risque de perte.
-            **Respecte le profil de risque.** Ne propose jamais un placement dont la volatilité dépasse la tolérance déclarée de l'utilisateur.
-            **Sois honnête sur tes limites.** Tu n'es pas un conseiller financier réglementé (CIF). Pour des décisions importantes (immobilier, succession, fiscalité complexe), recommande de consulter un professionnel.
-
-            ## Format de tes réponses
-            - Réponses adaptées à la question. Courtes par défaut, détaillées si la question le demande.
-            - Utilise des bullet points pour les listes d'actions ou de comparaisons.
-            - Pour les analyses budgétaires : **constat → impact chiffré → action recommandée**.
-            - Pour les conseils d'investissement : **objectif → produit recommandé → pourquoi → comment démarrer**.
-
-            ## Ce que tu ne fais pas
-            - Tu ne donnes pas de conseil fiscal ou juridique précis
-            - Tu ne recommandes pas de produits spécifiques d'une banque ou courtier en particulier
-            - Tu ne traites pas de sujets hors finance personnelle
-
-            ## Rigueur chiffrée — règle absolue
-            Quand tu proposes une répartition budgétaire (plusieurs montants qui doivent tenir dans une enveloppe disponible), vérifie toujours que la somme correspond avant de l'écrire. Affiche le calcul si besoin (ex : "300 € + 150 € + 300 € = 750 €, mais votre excédent est de 714 €, donc j'ajuste..."). Ne présente jamais une répartition dont la somme dépasse l'excédent disponible. Si tu te trompes et que tu corriges, dis-le clairement, ne fais pas comme si de rien n'était.
-
-            ## Cohérence de la stratégie
-            Tu dois rester cohérent avec les recommandations que tu as déjà données dans cette conversation. Avant de proposer une nouvelle répartition ou un nouveau plan, rappelle-toi ce qui a déjà été convenu. Si tu changes d'avis ou ajustes un plan précédent, dis-le explicitement : "Je modifie ma proposition précédente parce que...". Ne contredis jamais silencieusement une recommandation antérieure. Si l'utilisateur a déjà un plan établi dans la conversation, base tes réponses dessus : affine-le ou ajuste-le, ne repars pas de zéro à chaque message avec un plan totalement différent.
-
-            La date d'aujourd'hui est le {$today}.
+        $context = <<<CONTEXT
+            === CONTEXTE DU JOUR ===
+            Date d'aujourd'hui : {$today}
 
             === PROFIL CLIENT ===
             Nom : {$user->getFirstName()} {$user->getLastName()}
+
             === PROFIL INVESTISSEUR ===
-            Profil : {$profileText}
+            {$profileText}
+
             === SITUATION DU MOIS ===
             Revenus : {$income} €
             Dépenses : {$expenses} €
             Excédent (revenus - dépenses) : {$excedent} €
+
             === RÉPARTITION BUDGÉTAIRE DU MOIS ===
             Besoins essentiels : {$needs} € ({$needsPercent} % des revenus)
             Envies : {$wants} € ({$wantsPercent} % des revenus)
@@ -168,23 +189,194 @@ class AdvisorService
             Ces montants sont déjà calculés, ne les recalcule pas, utilise-les directement comme base de référence.
 
             {$idealRepartitionText}
+
             === PORTEFEUILLE ===
             Valeur totale du portefeuille : {$portfolioValue} €
             Plus/moins-value globale : {$portfolioGainLoss} € ({$portfolioGainLossPercent} %)
-            Investissements : {$investmentText}
+            Investissements :
+            {$investmentText}
             === OBJECTIFS ===
-            Objectifs : {$goalsText}
+            {$goalsText}
             === COMPTES ===
             Solde total disponible sur les comptes : {$totalBalance} €
-            Comptes : {$accountsText}
-            PROMPT;
+            {$accountsText}
+            === ÉVOLUTION REVENUS / DÉPENSES (6 DERNIERS MOIS) ===
+            {$evolutionText}
+            === DÉPENSES PAR CATÉGORIE (6 DERNIERS MOIS, EN €) ===
+            {$categoryText}
+            === OPÉRATIONS RÉCURRENTES DÉTECTÉES (revenus ET dépenses) ===
+            {$recurringText}
+            === TRANSACTIONS DÉTAILLÉES DU MOIS EN COURS ===
+            {$transactionsText}
+            CONTEXT;
 
-        return $prompt;
+        return $context;
+    }
+
+    /**
+     * @param Transaction[] $transactions
+     */
+    private function formatTransactions(array $transactions): string
+    {
+        if ($transactions === []) {
+            return 'Aucune transaction enregistrée sur le mois en cours.';
+        }
+
+        $labels = [
+            TransactionType::INCOME->value   => 'revenu',
+            TransactionType::EXPENSE->value  => 'dépense',
+            TransactionType::TRANSFER->value => 'virement',
+        ];
+
+        $groups = [
+            BudgetGroupType::NEEDS->value => 'besoins',
+            BudgetGroupType::WANTS->value => 'envies',
+        ];
+
+        $lines = [
+            'Les lignes « virement » sont des mouvements entre comptes, pas de la consommation.',
+            'Elles sont déjà exclues des totaux revenus, dépenses, besoins et envies ci-dessus :',
+            'ne les compte jamais comme des dépenses à réduire, et ne les additionne pas aux dépenses.',
+            '',
+        ];
+
+        foreach ($transactions as $transaction) {
+            // Un virement porte une categorie attribuee par defaut par le categoriseur,
+            // sans signification : son groupe budgetaire ne veut rien dire. On ne l'affiche pas.
+            if ($transaction->getType() === TransactionType::TRANSFER) {
+                $classification = 'virement (hors budget)';
+            } else {
+                $category = $transaction->getCategory()?->getName() ?? 'Non catégorisé';
+                $group    = $groups[$transaction->getCategory()?->getBudgetGroup()?->value] ?? null;
+
+                $classification = $group ? "{$category} ({$group})" : $category;
+            }
+
+            $lines[] = sprintf(
+                '- %s | %s | %s | %s %s €%s',
+                $transaction->getDate()?->format('d/m/Y') ?? '??',
+                $transaction->getName(),
+                $classification,
+                $labels[$transaction->getType()?->value] ?? '?',
+                number_format(abs((float) $transaction->getAmount()), 2, ',', ' '),
+                $transaction->getRecurringTransaction() ? ' | récurrent' : '',
+            );
+        }
+
+        // Le modele doit savoir qu'il ne voit pas tout, sinon il conclura sur un echantillon.
+        if (count($transactions) >= self::MAX_TRANSACTIONS) {
+            $lines[] = sprintf(
+                'ATTENTION : liste tronquée aux %d premières transactions du mois. Ne conclus pas sur des totaux calculés depuis cette liste, utilise les agrégats ci-dessus.',
+                self::MAX_TRANSACTIONS,
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param RecurringTransaction[] $recurring
+     */
+    private function formatRecurring(array $recurring): string
+    {
+        if ($recurring === []) {
+            return 'Aucune opération récurrente détectée.';
+        }
+
+        $labels = [
+            TransactionType::INCOME->value   => 'revenu',
+            TransactionType::EXPENSE->value  => 'dépense',
+            TransactionType::TRANSFER->value => 'virement',
+        ];
+
+        $lines = [];
+        foreach ($recurring as $item) {
+            $lines[] = sprintf(
+                '- %s | %s | %s %s € le %s de chaque mois',
+                $item->getName(),
+                $item->getCategory()?->getName() ?? 'catégorie non renseignée',
+                $labels[$item->getType()?->value] ?? '?',
+                number_format(abs((float) $item->getAmount()), 2, ',', ' '),
+                $item->getDayOfMonth() ?? '?',
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function formatMonthlyEvolution(User $user): string
+    {
+        $evolution = $this->transactionRepository->getMonthlyEvolution(
+            $user,
+            self::HISTORY_MONTHS,
+            $user->getPeriodStartDay() ?? 1,
+        );
+
+        $lines = [];
+        foreach ($evolution as $month) {
+            $balance = $month['income'] - $month['expenses'];
+            $lines[] = sprintf(
+                '- %s : revenus %s €, dépenses %s €, solde %s%s €',
+                $month['month'],
+                number_format($month['income'], 2, ',', ' '),
+                number_format($month['expenses'], 2, ',', ' '),
+                $balance >= 0 ? '+' : '-',
+                number_format(abs($balance), 2, ',', ' '),
+            );
+        }
+
+        return $lines === [] ? 'Historique indisponible.' : implode("\n", $lines);
+    }
+
+    /**
+     * Matrice categorie x mois : permet de reperer une derive sans transmettre
+     * le detail des transactions sur 6 mois.
+     */
+    private function formatCategoryHistory(User $user): string
+    {
+        $periods = [];
+        for ($i = self::HISTORY_MONTHS - 1; $i >= 0; $i--) {
+            $date = new \DateTime("first day of -{$i} months");
+            $periods[$date->format('m/Y')] = [
+                new \DateTime($date->format('Y-m-01')),
+                new \DateTime($date->format('Y-m-t')),
+            ];
+        }
+
+        $matrix = [];
+        foreach ($periods as $label => [$start, $end]) {
+            foreach ($this->transactionRepository->getCategoryTotals($user, $start, $end) as $category => $total) {
+                $matrix[$category][$label] = $total;
+            }
+        }
+
+        if ($matrix === []) {
+            return 'Aucune dépense catégorisée sur la période.';
+        }
+
+        $labels = array_keys($periods);
+        $lines  = ['Catégorie | ' . implode(' | ', $labels)];
+
+        foreach ($matrix as $category => $totals) {
+            $cells = [];
+            foreach ($labels as $label) {
+                $cells[] = isset($totals[$label]) ? number_format($totals[$label], 0, ',', ' ') : '0';
+            }
+            $lines[] = $category . ' | ' . implode(' | ', $cells);
+        }
+
+        return implode("\n", $lines);
     }
 
     public function streamChat(User $user, array $messages): void
     {
-        $systemPrompt = $this->buildSystemPrompt($user);
+        // Une analyse complete depasse largement le max_execution_time de 30 s du php.ini :
+        // sans ca, PHP tue le processus en plein stream, apres que le 200 soit parti,
+        // et le front recoit une reponse tronquee sans explication.
+        set_time_limit(0);
+
+        $instructions = $this->getInstructions();
+        $userContext  = $this->buildUserContext($user);
 
         $response = $this->httpClient->request('POST', 'https://api.anthropic.com/v1/messages', [
             'headers' => [
@@ -193,34 +385,101 @@ class AdvisorService
                 'Content-Type'      => 'application/json',
             ],
             'json' => [
-                'model'      => 'claude-sonnet-4-6',
-                'max_tokens' => 5000,
+                'model'      => 'claude-sonnet-5',
+                'max_tokens' => 32000,
                 'stream'     => true,
                 'system'     => [
+                    // Bloc stable : mis en cache cote API (prefixe identique d'une requete a l'autre).
                     [
                         'type'          => 'text',
-                        'text'          => $systemPrompt,
+                        'text'          => $instructions,
                         'cache_control' => ['type' => 'ephemeral'],
+                    ],
+                    // Bloc variable : place apres le point de cache, jamais mis en cache.
+                    [
+                        'type' => 'text',
+                        'text' => $userContext,
                     ],
                 ],
                 'messages'   => $messages,
             ],
-            'buffer' => false,
+            'buffer'       => false,
+            // Coupe un flux qui n'avance plus (60 s sans le moindre octet).
+            'timeout'      => 60,
+            // Plafond absolu, pour ne pas tenir une connexion ouverte indefiniment.
+            'max_duration' => 600,
         ]);
 
+        $buffer = '';
+
         foreach ($this->httpClient->stream($response) as $chunk) {
-        foreach (explode("\n", $chunk->getContent()) as $line) {
-                if (!str_starts_with($line, 'data: ')) continue;
-                $data = json_decode(substr($line, 6), true);
-                if (($data['type'] ?? '') === 'content_block_delta') {
-                    echo 'data: ' . json_encode(['text' => $data['delta']['text']]) . "\n\n";
-                    ob_flush();
-                    flush();
+            $buffer .= $chunk->getContent();
+
+            // Un chunk HTTP peut couper une ligne SSE en deux : on ne traite que les
+            // lignes completes et on garde le fragment restant pour le tour suivant.
+            while (($newline = strpos($buffer, "\n")) !== false) {
+                $line   = rtrim(substr($buffer, 0, $newline), "\r");
+                $buffer = substr($buffer, $newline + 1);
+
+                if (!str_starts_with($line, 'data: ')) {
+                    continue;
                 }
+
+                $data = json_decode(substr($line, 6), true);
+
+                if (!is_array($data)) {
+                    continue;
+                }
+
+                $this->forwardEvent($data);
             }
         }
-        echo "data: [DONE]\n\n";
-        ob_flush();
+
+        $this->send(['done' => true]);
+    }
+
+    /**
+     * Traduit un evenement SSE de l'API Anthropic en evenement pour le front.
+     */
+    private function forwardEvent(array $data): void
+    {
+        $type = $data['type'] ?? '';
+
+        if ($type === 'content_block_delta') {
+            // Seuls les deltas de texte nous interessent (un delta de thinking n'a pas de 'text').
+            if (($data['delta']['type'] ?? '') === 'text_delta') {
+                $this->send(['text' => $data['delta']['text'] ?? '']);
+            }
+
+            return;
+        }
+
+        if ($type === 'message_delta') {
+            $stopReason = $data['delta']['stop_reason'] ?? null;
+
+            // end_turn = reponse complete, rien a signaler. Tout le reste est anormal :
+            // max_tokens (reponse coupee), refusal, pause_turn...
+            if ($stopReason !== null && $stopReason !== 'end_turn') {
+                $this->send(['stopReason' => $stopReason]);
+            }
+
+            return;
+        }
+
+        if ($type === 'error') {
+            $this->send(['error' => $data['error']['message'] ?? 'Erreur inconnue de l\'API.']);
+        }
+    }
+
+    private function send(array $payload): void
+    {
+        echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE) . "\n\n";
+
+        // StreamedResponse n'ouvre pas de buffer de sortie : ob_flush() sans buffer actif emet une notice.
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+
         flush();
     }
 }

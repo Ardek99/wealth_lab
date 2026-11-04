@@ -29,6 +29,7 @@ services:
     App\Service\AdvisorService:
         arguments:
             $claudeApiKey: '%env(ANTHROPIC_API_KEY)%'
+            $projectDir: '%kernel.project_dir%'
 
     App\Service\TransactionCategorizerService:
         arguments:

@@ -51,7 +51,7 @@ class BankSyncService
         if (isset($data['status'])) {
             $connection->setStatus(match ($data['status']) {
                 'invalid_credentials' => BankConnectionStatus::INVALID_CREDENTIALS,
-                '2fa_required', 'captcha_required' => BankConnectionStatus::ACTION_NEEDED,
+                '2fa_required', 'captcha_required', 'action_needed' => BankConnectionStatus::ACTION_NEEDED,
                 default => BankConnectionStatus::ERROR,
             });
             $connection->setLastErrorMessage($data['message']);
